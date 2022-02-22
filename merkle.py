@@ -5,103 +5,156 @@ import numpy as np
 if sys.version_info < (3, 6):
     import sha3
 
-SHA3 = hashlib.sha3_224()
-
 class Node:
-    value = None
-    left = None
-    right = None
-
-    def __init__(self, value, left_node=None, right_node=None) -> None:
+    def __init__(self, value, left_child=None, right_child=None):
         self.value = value
-        self.left = left_node
-        self.right = right_node
+        self.left_child = left_child
+        self.right_child = right_child
+        self.parent = None
 
-def createLeafList(data, dataSize, leafMaxSize):
-    leaf_list = []
-    while dataSize > 0:
-        SHA3.update(data)
+    def __lt__(self, other):
+        return self.value < other.value
 
-        dataSize -= leafMaxSize
-        leaf_list.append(SHA3.hexdigest())
-    return leaf_list
+    def setParent(self, parent):
+        self.parent = parent
 
-def getNodeCountAtNextDepth(currDepth):
-    return math.ceil(currDepth / 2)
+class MerkleTree:
+    def __init__(self):
+        self.leafNodes = None
+        self.root = None
 
-def printMerkleTree(node):
-    if node.left != None: printMerkleTree(node.left)
-    if node.right != None: printMerkleTree(node.right)
+    def create_from_data_list(self, dataList):
+        self.leafNodes = self.create_leaf_nodes_from_data_list(dataList)
+        self.traverse(self.leafNodes, None)
 
-# given current index, check if the index * 2 and index * 2 + 1 values exist
-# if index * 2 exist, create left node,
-# if index * 2 + 1 exist, create right node
+    def create_from_data(self, data, parseSize):
+        self.leafNodes = self.create_leaf_nodes_from_data(data, parseSize)
+        self.traverse(self.leafNodes, None)
 
-# traverse(root, 0, 0)
-def traverse(nodes, root, depth, index):
-    if depth == len(nodes) - 1: return
-
-    if index * 2 == len(nodes[depth + 1]) - 1:
-        # left only
-        root.left = Node(nodes[depth + 1][index * 2], None, None)
-        traverse(nodes, root.left, depth + 1, index * 2)
-    else:
-        # left and right
-        root.left = Node(nodes[depth + 1][index * 2], None, None)
-        root.right = Node(nodes[depth + 1][index * 2 + 1], None, None)
-        traverse(nodes, root.left, depth + 1, index * 2)
-        traverse(nodes, root.right, depth + 1, index * 2 + 1)
-
-def createMerkleHashArrays(leafList, treeHeight):
-    nodes = []
-    nodes.append(leafList)
-
-    prevDepthNodeCount = len(leafList) # 5
-    currDepthNodeCount = getNodeCountAtNextDepth(prevDepthNodeCount) # 3
-
-    prevDepthNodes = leafList
-    currDepthNodes = []
-
-    for depth in range(1, treeHeight): # 1, 2, 3
+    def create_leaf_nodes_from_data(self, data, parse_size):
+        leaf_nodes = []
+        data_size = len(data)
         index = 0
+        while index < data_size:
+            sha3 = hashlib.sha3_224()
+            parseData = data[index : min(index + parse_size, data_size)]
+            sha3.update(parseData)
+            leaf_nodes.append(Node(sha3.hexdigest()))
+            index += parse_size
+        leaf_nodes.sort(reverse=True)
+        return leaf_nodes
 
-        while index < prevDepthNodeCount:
-            if index + 1 == prevDepthNodeCount:
-                currDepthNodes.append(prevDepthNodes[index])
+    def create_leaf_nodes_from_data_list(self, data_list):
+        leaf_nodes = []
+        for data in data_list:
+            sha3 = hashlib.sha3_224()
+            sha3.update(data.encode())
+            leaf_nodes.append(Node(sha3.hexdigest()))
+        leaf_nodes.sort(reverse=True)
+        return leaf_nodes
+
+    def print_pre_order(self, node):
+        print("\nvalue: ", node.value)
+        print("parent: ", node.parent.value if node.parent != None else node.parent)
+        if node.left_child != None: self.print_pre_order(node.left_child)
+        if node.right_child != None: self.print_pre_order(node.right_child)
+
+    def print_in_order(self, node):
+        if node.left_child != None: self.print_in_order(node.left_child)
+        print("\nvalue: ", node.value)
+        print("parent: ", node.parent.value if node.parent != None else node.parent)
+        if node.right_child != None: self.print_in_order(node.right_child)
+
+    def print_post_order(self, node):
+        if node.left_child != None: self.print_post_order(node.left_child)
+        if node.right_child != None: self.print_post_order(node.right_child)
+        print("\nvalue: ", node.value)
+        print("parent: ", node.parent.value if node.parent != None else node.parent)
+
+    def traverse(self, nodes, oddNode):
+        print("traverse")
+        print("len(nodes): ", len(nodes))
+        if oddNode != None:
+            print("oddNode: ", oddNode.value)
+        else:
+            print("oddNode: ", oddNode)
+
+        if len(nodes) == 1 and oddNode == None :
+            self.root = nodes[0]
+            return self.root
+
+        if len(nodes) % 2 == 1:
+            if oddNode != None:
+                nodes.append(oddNode)
+                oddNode = None
             else:
-                SHA3.update((prevDepthNodes[index] + prevDepthNodes[index + 1]).encode())
-                currDepthNodes.append(SHA3.hexdigest())
-            index += 2
-        nodes.insert(0, currDepthNodes)
-        prevDepthNodes = currDepthNodes
-        currDepthNodes = []
-        prevDepthNodeCount = currDepthNodeCount
-        currDepthNodeCount = getNodeCountAtNextDepth(currDepthNodeCount)
-    return nodes
+                oddNode = nodes.pop()
 
-def create(data, leafMaxSize):
-    dataSize = len(data)
-    if dataSize == 0:
-        sys.exit("size should be greater than 0")
+        parents = []
+        for i in range(int(len(nodes) / 2)):
+            left_child = nodes[i * 2]
+            right_child = nodes[i * 2 + 1]
+            print("left_child.value: ", left_child.value)
+            print("right_child.value: ", right_child.value)
+            if left_child.value < right_child.value: left_child, right_child = right_child, left_child
+            print("left_child.value: ", left_child.value)
+            print("right_child.value: ", right_child.value)
+            
+            sha3 = hashlib.sha3_224()
+            sha3.update((left_child.value + right_child.value).encode())
+            print("parent.value: ", sha3.hexdigest())
+            parent = Node(sha3.hexdigest(), left_child, right_child)
+            parents.append(parent)
+            left_child.parent = parent
+            right_child.parent = parent
+        return self.traverse(parents, oddNode)
 
-    leafList = createLeafList(data, dataSize, leafMaxSize)
+    def getProofs(self, leafData):
+        sha3 = hashlib.sha3_224()
+        sha3.update(leafData.encode())
+        leafNode = self.search(self.root, sha3.hexdigest())
+        if leafNode == None:
+            print("could not find given leaf")
+            return
+        siblings = []
+        self.getSibling(leafNode, siblings)
+        print("siblings len: ", len(siblings))
+        for i in range(len(siblings)):
+            print("i: ", siblings[i])
+        return siblings
 
-    treeHeight = math.ceil(math.log2(len(leafList))) + 1
+    def getSibling(self, node, siblings):
+        parent = node.parent
+        if parent == None:
+            return
+        
+        if node == parent.left_child:
+            siblings.append(parent.right_child.value)
+        else:
+            siblings.append(parent.left_child.value)
+        self.getSibling(parent, siblings)
 
-    nodes = createMerkleHashArrays(leafList, treeHeight)
+    def search(self, node, value):
+        if node == None:
+            return None
+        if node.value == value:
+            return node
+        
+        leftResult = self.search(node.left_child, value)
+        if leftResult != None: return leftResult
 
-    root = Node(nodes[0][0], None, None)
-    traverse(nodes, root, 0, 0)
-    return root
+        rightResult = self.search(node.right_child, value)
+        if rightResult != None: return rightResult
 
+    def verify(self, root, data, siblings):
+        sha3 = hashlib.sha3_224()
+        sha3.update(data.encode())
+        hash = sha3.hexdigest()
+        for siblingHash in siblings:
+            if hash < siblingHash: hash, siblingHash = siblingHash, hash
+            sha3 = hashlib.sha3_224()
+            sha3.update((hash + siblingHash).encode())
+            hash = sha3.hexdigest()
 
-def verify(root, data, siblings):
-    SHA3.update(data)
-    hash = SHA3.hexdigest()
-    print("first hash: ", hash)
-    for sibling in siblings:
-        hash = SHA3.update((hash + sibling).encode())
-        print("new hash: ", hash)
-
-    if root == hash: return True
-    return False
+        if root == hash: return True
+        return False

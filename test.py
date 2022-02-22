@@ -1,20 +1,14 @@
-import os
-import sys
-import merkle
+from merkle import MerkleTree
 
-print("\nlen(sys.argv):", len(sys.argv))
-if len(sys.argv) < 2:
-    sys.exit()
+def test_data_list():
+    dataList = ["a", "b", "c", "d", "e"]
+    merkle = MerkleTree()
+    merkle.create_from_data_list(dataList)
+    expectedRootValue = b'550772be11d74b2f729c534b0b2dba7958feb0ad7667d7f7f1cc5bf8'
+    assert merkle.root.value.encode() == expectedRootValue
 
-print("\nName of file:", sys.argv[1])
-f = open(sys.argv[1], "r")
+    siblings = merkle.getProofs("a")
+    assert merkle.verify(merkle.root.value, "a", siblings) == True
 
-size = os.path.getsize(sys.argv[1])
-print("\nSize of file: ", size)
-
-data = f.read().encode('utf-8')
-print("\ndata: ", data)
-
-root = merkle.create(data, 50)
-
-merkle.printMerkleTree(root)
+if __name__ == "__main__":
+    test_data_list()
